@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Machine, Program } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
 import ProgramSelector from "@/components/ProgramSelector";
@@ -19,6 +19,21 @@ const Index = () => {
     { id: 'd1', name: 'Dryer 1', type: 'dryer', status: 'available' },
     { id: 'd2', name: 'Dryer 2', type: 'dryer', status: 'available' },
   ]);
+
+  // Handle QR code scanning
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const machineId = params.get('machine');
+    
+    if (machineId) {
+      const machine = machines.find(m => m.id === machineId);
+      if (machine) {
+        handleMachineSelect(machine);
+      }
+      // Clear the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [machines]);
 
   const handleMachineSelect = (machine: Machine) => {
     if (machine.status === 'available') {
