@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Machine, Program } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
 import ProgramSelector from "@/components/ProgramSelector";
+import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { Smartphone } from "lucide-react";
 
@@ -23,7 +24,24 @@ const Index = () => {
     if (machine.status === 'available') {
       setSelectedMachine(machine);
       setShowProgramSelector(true);
+    } else if (machine.status === 'in-use') {
+      handleStopMachine(machine);
     }
+  };
+
+  const handleStopMachine = (machine: Machine) => {
+    setMachines(prev =>
+      prev.map(m =>
+        m.id === machine.id
+          ? { ...m, status: 'available', currentProgram: undefined, endTime: undefined }
+          : m
+      )
+    );
+
+    toast({
+      title: "Timer Stopped",
+      description: `${machine.name} timer has been cancelled.`,
+    });
   };
 
   const handleProgramSelect = (program: Program) => {
@@ -85,6 +103,20 @@ const Index = () => {
             <p className="text-lg">Scan QR code to start</p>
           </div>
         </header>
+
+        {/* QR Codes Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-center text-foreground">Machine QR Codes</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {machines.map((machine) => (
+              <QRCodeDisplay 
+                key={machine.id} 
+                machineId={machine.id} 
+                machineName={machine.name}
+              />
+            ))}
+          </div>
+        </div>
 
         {/* Machines Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
