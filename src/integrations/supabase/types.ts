@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      machines: {
+        Row: {
+          can_postpone: boolean | null
+          current_program_duration: number | null
+          current_program_name: string | null
+          end_time: string | null
+          id: string
+          name: string
+          status: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          can_postpone?: boolean | null
+          current_program_duration?: number | null
+          current_program_name?: string | null
+          end_time?: string | null
+          id: string
+          name: string
+          status: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          can_postpone?: boolean | null
+          current_program_duration?: number | null
+          current_program_name?: string | null
+          end_time?: string | null
+          id?: string
+          name?: string
+          status?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
