@@ -5,6 +5,7 @@ import ProgramSelector from "@/components/ProgramSelector";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { Smartphone } from "lucide-react";
+import { Card } from "@/components/ui/card";
 
 const Index = () => {
   const { toast } = useToast();
@@ -121,7 +122,21 @@ const Index = () => {
 
         {/* QR Codes Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-center text-foreground">Machine QR Codes</h2>
+          <h2 className="text-2xl font-bold mb-4 text-center text-foreground">QR Codes</h2>
+          
+          {/* Home QR Code */}
+          <div className="flex justify-center mb-6">
+            <Card className="p-6 flex flex-col items-center gap-3 bg-primary/5">
+              <QRCodeDisplay 
+                machineId="" 
+                machineName="View All Machines"
+              />
+              <p className="text-xs text-muted-foreground">Scan to see all timers</p>
+            </Card>
+          </div>
+
+          {/* Machine QR Codes */}
+          <h3 className="text-lg font-semibold mb-3 text-center text-muted-foreground">Individual Machines</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {machines.map((machine) => (
               <QRCodeDisplay 

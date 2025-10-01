@@ -7,8 +7,10 @@ interface QRCodeDisplayProps {
 }
 
 const QRCodeDisplay = ({ machineId, machineName }: QRCodeDisplayProps) => {
-  // Generate URL with machine ID parameter
-  const qrUrl = `${window.location.origin}?machine=${machineId}`;
+  // Generate URL with machine ID parameter (empty machineId = home page)
+  const qrUrl = machineId 
+    ? `${window.location.origin}?machine=${machineId}`
+    : window.location.origin;
 
   return (
     <Card className="p-4 flex flex-col items-center gap-3">
