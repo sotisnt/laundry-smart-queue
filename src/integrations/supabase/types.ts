@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      machine_usage: {
+        Row: {
+          created_at: string | null
+          end_time: string | null
+          id: string
+          machine_id: string
+          program_duration: number
+          program_name: string
+          room_number: string
+          start_time: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_time?: string | null
+          id?: string
+          machine_id: string
+          program_duration: number
+          program_name: string
+          room_number: string
+          start_time?: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string | null
+          end_time?: string | null
+          id?: string
+          machine_id?: string
+          program_duration?: number
+          program_name?: string
+          room_number?: string
+          start_time?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "machine_usage_machine_id_fkey"
+            columns: ["machine_id"]
+            isOneToOne: false
+            referencedRelation: "machines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       machines: {
         Row: {
           can_postpone: boolean | null

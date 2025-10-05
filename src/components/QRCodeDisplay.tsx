@@ -7,9 +7,9 @@ interface QRCodeDisplayProps {
 }
 
 const QRCodeDisplay = ({ machineId, machineName }: QRCodeDisplayProps) => {
-  // Generate URL with machine ID parameter (empty machineId = home page)
+  // Generate URL to machine page
   const qrUrl = machineId 
-    ? `${window.location.origin}?machine=${machineId}`
+    ? `${window.location.origin}/machine/${machineId}`
     : window.location.origin;
 
   return (
