@@ -6,20 +6,68 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { Smartphone } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const { toast } = useToast();
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const [showProgramSelector, setShowProgramSelector] = useState(false);
+  const [machines, setMachines] = useState<Machine[]>([]);
 
-  // Initialize machines
-  const [machines, setMachines] = useState<Machine[]>([
-    { id: 'w1', name: 'Washer 1', type: 'washer', status: 'available' },
-    { id: 'w2', name: 'Washer 2', type: 'washer', status: 'available' },
-    { id: 'w3', name: 'Washer 3', type: 'washer', status: 'available' },
-    { id: 'd1', name: 'Dryer 1', type: 'dryer', status: 'available' },
-    { id: 'd2', name: 'Dryer 2', type: 'dryer', status: 'available' },
-  ]);
+  // Fetch machines from database
+  useEffect(() => {
+    const fetchMachines = async () => {
+      const { data, error } = await supabase
+        .from('machines')
+        .select('*')
+        .order('id');
+
+      if (error) {
+        console.error('Error fetching machines:', error);
+        return;
+      }
+
+      if (data) {
+        setMachines(data.map(m => ({
+          id: m.id,
+          name: m.name,
+          type: m.type as 'washer' | 'dryer',
+          status: m.status as 'available' | 'in-use' | 'done',
+          currentProgram: m.current_program_name ? {
+            id: m.current_program_name.toLowerCase().replace(/\s+/g, '-'),
+            name: m.current_program_name,
+            duration: m.current_program_duration || 0,
+            type: m.type as 'washer' | 'dryer'
+          } : undefined,
+          endTime: m.end_time ? new Date(m.end_time) : undefined,
+          canPostpone: m.can_postpone
+        })));
+      }
+    };
+
+    fetchMachines();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('machines-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'machines'
+        },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          fetchMachines(); // Refetch on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Handle QR code scanning
   useEffect(() => {
@@ -45,14 +93,27 @@ const Index = () => {
     }
   };
 
-  const handleStopMachine = (machine: Machine) => {
-    setMachines(prev =>
-      prev.map(m =>
-        m.id === machine.id
-          ? { ...m, status: 'available', currentProgram: undefined, endTime: undefined }
-          : m
-      )
-    );
+  const handleStopMachine = async (machine: Machine) => {
+    const { error } = await supabase
+      .from('machines')
+      .update({
+        status: 'available',
+        current_program_name: null,
+        current_program_duration: null,
+        end_time: null,
+        can_postpone: null
+      })
+      .eq('id', machine.id);
+
+    if (error) {
+      console.error('Error stopping machine:', error);
+      toast({
+        title: "Error",
+        description: "Failed to stop the timer. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     toast({
       title: "Timer Stopped",
@@ -60,25 +121,33 @@ const Index = () => {
     });
   };
 
-  const handleProgramSelect = (program: Program) => {
+  const handleProgramSelect = async (program: Program) => {
     if (!selectedMachine) return;
 
     const endTime = new Date();
     endTime.setMinutes(endTime.getMinutes() + program.duration);
 
-    setMachines(prev =>
-      prev.map(m =>
-        m.id === selectedMachine.id
-          ? {
-              ...m,
-              status: 'in-use',
-              currentProgram: program,
-              endTime,
-              canPostpone: true,
-            }
-          : m
-      )
-    );
+    // Update database
+    const { error } = await supabase
+      .from('machines')
+      .update({
+        status: 'in-use',
+        current_program_name: program.name,
+        current_program_duration: program.duration,
+        end_time: endTime.toISOString(),
+        can_postpone: true
+      })
+      .eq('id', selectedMachine.id);
+
+    if (error) {
+      console.error('Error updating machine:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start the program. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     toast({
       title: "Program Started",
@@ -89,14 +158,11 @@ const Index = () => {
     setSelectedMachine(null);
 
     // Simulate completion
-    setTimeout(() => {
-      setMachines(prev =>
-        prev.map(m =>
-          m.id === selectedMachine.id
-            ? { ...m, status: 'done' }
-            : m
-        )
-      );
+    setTimeout(async () => {
+      await supabase
+        .from('machines')
+        .update({ status: 'done' })
+        .eq('id', selectedMachine.id);
 
       toast({
         title: "Cycle Complete!",
