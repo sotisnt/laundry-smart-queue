@@ -9,65 +9,19 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
-import { z } from "zod";
-
-const userNameSchema = z.string()
-  .min(1, "Name is required")
-  .max(100, "Name must be less than 100 characters")
-  .trim();
-
-const roomNumberSchema = z.string()
-  .min(1, "Room number is required")
-  .max(10, "Room number must be less than 10 characters")
-  .regex(/^[A-Za-z0-9-]+$/, "Room number can only contain letters, numbers, and hyphens")
-  .trim();
 
 const Machine = () => {
   const { machineId } = useParams<{ machineId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
   const [machine, setMachine] = useState<Machine | null>(null);
   const [userName, setUserName] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [loading, setLoading] = useState(true);
-  const [errors, setErrors] = useState<{ userName?: string; roomNumber?: string }>({});
-
-  // Check authentication
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to use the machines",
-          variant: "destructive"
-        });
-        navigate("/auth");
-        return;
-      }
-
-      setUser(session.user);
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate, toast]);
 
   useEffect(() => {
-    if (!machineId || !user) return;
+    if (!machineId) return;
 
     const fetchMachine = async () => {
       const { data, error } = await supabase
@@ -126,43 +80,13 @@ const Machine = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [machineId, user, navigate, toast]);
+  }, [machineId, navigate, toast]);
 
   const handleStartProgram = async () => {
-    if (!machine || !selectedProgram || !user) {
+    if (!machine || !selectedProgram || !userName.trim() || !roomNumber.trim()) {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validate inputs
-    const newErrors: { userName?: string; roomNumber?: string } = {};
-    
-    try {
-      userNameSchema.parse(userName);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        newErrors.userName = error.errors[0].message;
-      }
-    }
-
-    try {
-      roomNumberSchema.parse(roomNumber);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        newErrors.roomNumber = error.errors[0].message;
-      }
-    }
-
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the errors in the form",
         variant: "destructive"
       });
       return;
@@ -201,14 +125,13 @@ const Machine = () => {
       return;
     }
 
-    // Record usage with user_id
+    // Record usage
     const { error: usageError } = await supabase
       .from('machine_usage')
       .insert({
         machine_id: machine.id,
-        user_id: user.id,
-        user_name: userName.trim(),
-        room_number: roomNumber.trim(),
+        user_name: userName,
+        room_number: roomNumber,
         program_name: selectedProgram.name,
         program_duration: selectedProgram.duration
       });
@@ -336,32 +259,18 @@ const Machine = () => {
                 id="userName"
                 placeholder="Enter your name"
                 value={userName}
-                onChange={(e) => {
-                  setUserName(e.target.value);
-                  setErrors(prev => ({ ...prev, userName: undefined }));
-                }}
-                className={errors.userName ? "border-destructive" : ""}
+                onChange={(e) => setUserName(e.target.value)}
               />
-              {errors.userName && (
-                <p className="text-sm text-destructive mt-1">{errors.userName}</p>
-              )}
             </div>
             
             <div>
               <Label htmlFor="roomNumber">Room Number</Label>
               <Input
                 id="roomNumber"
-                placeholder="Enter your room number (e.g., 201, A-15)"
+                placeholder="Enter your room number"
                 value={roomNumber}
-                onChange={(e) => {
-                  setRoomNumber(e.target.value);
-                  setErrors(prev => ({ ...prev, roomNumber: undefined }));
-                }}
-                className={errors.roomNumber ? "border-destructive" : ""}
+                onChange={(e) => setRoomNumber(e.target.value)}
               />
-              {errors.roomNumber && (
-                <p className="text-sm text-destructive mt-1">{errors.roomNumber}</p>
-              )}
             </div>
           </div>
 

@@ -2,28 +2,26 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Machine } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
-import { Smartphone, LogIn, Settings } from "lucide-react";
+import { Smartphone, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import type { User } from "@supabase/supabase-js";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-
-  // Check authentication
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const [showAdminDialog, setShowAdminDialog] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
 
   // Fetch machines from database
   useEffect(() => {
@@ -80,42 +78,42 @@ const Index = () => {
     };
   }, []);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPassword === "laundry") {
+      sessionStorage.setItem("adminAuth", "laundry");
+      navigate("/admin");
+    } else {
+      toast({
+        title: "Access Denied",
+        description: "Incorrect password",
+        variant: "destructive"
+      });
+      setAdminPassword("");
+    }
   };
+
 
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="text-center mb-8 md:mb-12 relative">
-          <div className="absolute right-0 top-0 flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate("/admin")}
-              title="Admin Panel"
-            >
-              <Settings className="w-5 h-5" />
-            </Button>
-            {user ? (
-              <Button variant="outline" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            ) : (
-              <Button variant="default" onClick={() => navigate("/auth")}>
-                <LogIn className="w-4 h-4 mr-2" />
-                Login
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute right-0 top-0"
+            onClick={() => setShowAdminDialog(true)}
+          >
+            <Settings className="w-5 h-5" />
+          </Button>
           
           <h1 className="text-4xl md:text-5xl font-bold mb-3 text-foreground">
             Laundry Room
           </h1>
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Smartphone className="w-5 h-5" />
-            <p className="text-lg">{user ? "Select a machine or scan QR code" : "Login to start"}</p>
+            <p className="text-lg">Scan QR code to start</p>
           </div>
         </header>
 
@@ -141,6 +139,34 @@ const Index = () => {
           </div>
         </footer>
       </div>
+
+      {/* Admin Login Dialog */}
+      <Dialog open={showAdminDialog} onOpenChange={setShowAdminDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Admin Access</DialogTitle>
+            <DialogDescription>
+              Enter the admin password to access the control panel
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <Label htmlFor="adminPassword">Password</Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                placeholder="Enter admin password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Login
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

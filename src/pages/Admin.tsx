@@ -3,10 +3,11 @@ import { Machine } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { LogOut, Loader2 } from "lucide-react";
+import { Lock, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -16,65 +17,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { User } from "@supabase/supabase-js";
 
 const Admin = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [usageRecords, setUsageRecords] = useState<any[]>([]);
 
-  // Check authentication and admin role
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-
-      setUser(session.user);
-
-      // Check if user has admin role
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (!roleData) {
-        toast({
-          title: "Access Denied",
-          description: "You need admin privileges to access this page",
-          variant: "destructive"
-        });
-        navigate("/");
-        return;
-      }
-
-      setIsAdmin(true);
-      setLoading(false);
-    };
-
-    checkAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate, toast]);
+    const adminAuth = sessionStorage.getItem("adminAuth");
+    if (adminAuth === "laundry") {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAuthenticated) return;
 
     const fetchData = async () => {
       // Fetch machines
@@ -141,11 +101,30 @@ const Admin = () => {
       supabase.removeChannel(machinesChannel);
       supabase.removeChannel(usageChannel);
     };
-  }, [isAdmin]);
+  }, [isAuthenticated]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === "laundry") {
+      sessionStorage.setItem("adminAuth", "laundry");
+      setIsAuthenticated(true);
+      toast({
+        title: "Access Granted",
+        description: "Welcome to the admin panel",
+      });
+    } else {
+      toast({
+        title: "Access Denied",
+        description: "Incorrect password",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("adminAuth");
+    setIsAuthenticated(false);
+    setPassword("");
   };
 
   const handleStopMachine = async (machine: Machine) => {
@@ -182,16 +161,28 @@ const Admin = () => {
     });
   };
 
-  if (loading) {
+  if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="p-8 w-full max-w-md">
+          <div className="flex flex-col items-center gap-6">
+            <Lock className="w-16 h-16 text-primary" />
+            <h1 className="text-2xl font-bold">Admin Access</h1>
+            <form onSubmit={handleLogin} className="w-full space-y-4">
+              <Input
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Button type="submit" className="w-full">
+                Login
+              </Button>
+            </form>
+          </div>
+        </Card>
       </div>
     );
-  }
-
-  if (!isAdmin) {
-    return null;
   }
 
   return (
