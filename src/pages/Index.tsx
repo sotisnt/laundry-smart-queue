@@ -1,113 +1,82 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Machine } from "@/types/machine";
+import { useState } from "react";
+import { Machine, Program } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
-import { Smartphone, Settings } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import ProgramSelector from "@/components/ProgramSelector";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Smartphone } from "lucide-react";
 
 const Index = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [showAdminDialog, setShowAdminDialog] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
+  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [showProgramSelector, setShowProgramSelector] = useState(false);
 
-  // Fetch machines from database
-  useEffect(() => {
-    const fetchMachines = async () => {
-      const { data, error } = await supabase
-        .from('machines')
-        .select('*')
-        .order('id');
+  // Initialize machines
+  const [machines, setMachines] = useState<Machine[]>([
+    { id: 'w1', name: 'Washer 1', type: 'washer', status: 'available' },
+    { id: 'w2', name: 'Washer 2', type: 'washer', status: 'available' },
+    { id: 'w3', name: 'Washer 3', type: 'washer', status: 'available' },
+    { id: 'd1', name: 'Dryer 1', type: 'dryer', status: 'available' },
+    { id: 'd2', name: 'Dryer 2', type: 'dryer', status: 'available' },
+  ]);
 
-      if (error) {
-        console.error('Error fetching machines:', error);
-        return;
-      }
-
-      if (data) {
-        setMachines(data.map(m => ({
-          id: m.id,
-          name: m.name,
-          type: m.type as 'washer' | 'dryer',
-          status: m.status as 'available' | 'in-use' | 'done',
-          currentProgram: m.current_program_name ? {
-            id: m.current_program_name.toLowerCase().replace(/\s+/g, '-'),
-            name: m.current_program_name,
-            duration: m.current_program_duration || 0,
-            type: m.type as 'washer' | 'dryer'
-          } : undefined,
-          endTime: m.end_time ? new Date(m.end_time) : undefined,
-          canPostpone: m.can_postpone
-        })));
-      }
-    };
-
-    fetchMachines();
-
-    // Subscribe to real-time updates
-    const channel = supabase
-      .channel('machines-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'machines'
-        },
-        (payload) => {
-          console.log('Real-time update:', payload);
-          fetchMachines(); // Refetch on any change
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === "laundry") {
-      sessionStorage.setItem("adminAuth", "laundry");
-      navigate("/admin");
-    } else {
-      toast({
-        title: "Access Denied",
-        description: "Incorrect password",
-        variant: "destructive"
-      });
-      setAdminPassword("");
+  const handleMachineSelect = (machine: Machine) => {
+    if (machine.status === 'available') {
+      setSelectedMachine(machine);
+      setShowProgramSelector(true);
     }
   };
 
+  const handleProgramSelect = (program: Program) => {
+    if (!selectedMachine) return;
+
+    const endTime = new Date();
+    endTime.setMinutes(endTime.getMinutes() + program.duration);
+
+    setMachines(prev =>
+      prev.map(m =>
+        m.id === selectedMachine.id
+          ? {
+              ...m,
+              status: 'in-use',
+              currentProgram: program,
+              endTime,
+              canPostpone: true,
+            }
+          : m
+      )
+    );
+
+    toast({
+      title: "Program Started",
+      description: `${selectedMachine.name} is now running ${program.name} for ${program.duration} minutes.`,
+    });
+
+    setShowProgramSelector(false);
+    setSelectedMachine(null);
+
+    // Simulate completion
+    setTimeout(() => {
+      setMachines(prev =>
+        prev.map(m =>
+          m.id === selectedMachine.id
+            ? { ...m, status: 'done' }
+            : m
+        )
+      );
+
+      toast({
+        title: "Cycle Complete!",
+        description: `${selectedMachine.name} has finished. Please unload your laundry.`,
+        variant: "default",
+      });
+    }, program.duration * 60 * 1000);
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="text-center mb-8 md:mb-12 relative">
-          <Button
-            variant="outline"
-            size="icon"
-            className="absolute right-0 top-0"
-            onClick={() => setShowAdminDialog(true)}
-          >
-            <Settings className="w-5 h-5" />
-          </Button>
-          
+        <header className="text-center mb-8 md:mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-3 text-foreground">
             Laundry Room
           </h1>
@@ -123,6 +92,7 @@ const Index = () => {
             <MachineCard
               key={machine.id}
               machine={machine}
+              onSelect={handleMachineSelect}
             />
           ))}
         </div>
@@ -140,33 +110,16 @@ const Index = () => {
         </footer>
       </div>
 
-      {/* Admin Login Dialog */}
-      <Dialog open={showAdminDialog} onOpenChange={setShowAdminDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Admin Access</DialogTitle>
-            <DialogDescription>
-              Enter the admin password to access the control panel
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <div>
-              <Label htmlFor="adminPassword">Password</Label>
-              <Input
-                id="adminPassword"
-                type="password"
-                placeholder="Enter admin password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <Button type="submit" className="w-full">
-              Login
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Program Selector Modal */}
+      <ProgramSelector
+        machine={selectedMachine}
+        open={showProgramSelector}
+        onClose={() => {
+          setShowProgramSelector(false);
+          setSelectedMachine(null);
+        }}
+        onSelectProgram={handleProgramSelect}
+      />
     </div>
   );
 };

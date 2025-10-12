@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 interface MachineCardProps {
   machine: Machine;
-  onSelect?: (machine: Machine) => void;
+  onSelect: (machine: Machine) => void;
 }
 
 const MachineCard = ({ machine, onSelect }: MachineCardProps) => {
@@ -59,10 +59,10 @@ const MachineCard = ({ machine, onSelect }: MachineCardProps) => {
 
   return (
     <Card
-      onClick={() => onSelect && (machine.status === 'available' || machine.status === 'in-use') && onSelect(machine)}
+      onClick={() => machine.status === 'available' && onSelect(machine)}
       className={`
         relative overflow-hidden shadow-card transition-smooth
-        ${onSelect && (machine.status === 'available' || machine.status === 'in-use') ? 'cursor-pointer hover:shadow-active hover:scale-105' : ''}
+        ${machine.status === 'available' ? 'cursor-pointer hover:shadow-active hover:scale-105' : ''}
         ${machine.status === 'done' ? 'animate-pulse-glow' : ''}
       `}
     >
@@ -103,9 +103,6 @@ const MachineCard = ({ machine, onSelect }: MachineCardProps) => {
                 Program: {machine.currentProgram.name}
               </p>
             )}
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Tap to stop timer
-            </p>
           </div>
         )}
 
