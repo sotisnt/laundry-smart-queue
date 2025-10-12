@@ -59,10 +59,10 @@ const MachineCard = ({ machine, onSelect }: MachineCardProps) => {
 
   return (
     <Card
-      onClick={() => machine.status === 'available' && onSelect(machine)}
+      onClick={() => (machine.status === 'available' || machine.status === 'in-use') && onSelect(machine)}
       className={`
         relative overflow-hidden shadow-card transition-smooth
-        ${machine.status === 'available' ? 'cursor-pointer hover:shadow-active hover:scale-105' : ''}
+        ${machine.status === 'available' || machine.status === 'in-use' ? 'cursor-pointer hover:shadow-active hover:scale-105' : ''}
         ${machine.status === 'done' ? 'animate-pulse-glow' : ''}
       `}
     >
@@ -103,6 +103,9 @@ const MachineCard = ({ machine, onSelect }: MachineCardProps) => {
                 Program: {machine.currentProgram.name}
               </p>
             )}
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Tap to stop timer
+            </p>
           </div>
         )}
 
