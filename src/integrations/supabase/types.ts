@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      machine_logs: {
+        Row: {
+          action: string
+          id: string
+          machine_id: string
+          timestamp: string | null
+        }
+        Insert: {
+          action: string
+          id?: string
+          machine_id: string
+          timestamp?: string | null
+        }
+        Update: {
+          action?: string
+          id?: string
+          machine_id?: string
+          timestamp?: string | null
+        }
+        Relationships: []
+      }
       machine_usage: {
         Row: {
           created_at: string | null
