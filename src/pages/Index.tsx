@@ -1,24 +1,68 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Machine, Program } from "@/types/machine";
 import MachineCard from "@/components/MachineCard";
 import ProgramSelector from "@/components/ProgramSelector";
-import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { useToast } from "@/hooks/use-toast";
-import { Smartphone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { QrCode } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const [showProgramSelector, setShowProgramSelector] = useState(false);
+  const [machines, setMachines] = useState<Machine[]>([]);
 
-  // Initialize machines
-  const [machines, setMachines] = useState<Machine[]>([
-    { id: 'w1', name: 'Washer 1', type: 'washer', status: 'available' },
-    { id: 'w2', name: 'Washer 2', type: 'washer', status: 'available' },
-    { id: 'w3', name: 'Washer 3', type: 'washer', status: 'available' },
-    { id: 'd1', name: 'Dryer 1', type: 'dryer', status: 'available' },
-    { id: 'd2', name: 'Dryer 2', type: 'dryer', status: 'available' },
-  ]);
+  useEffect(() => {
+    fetchMachines();
+    
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('machines-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'machines'
+        },
+        () => {
+          fetchMachines();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchMachines = async () => {
+    const { data, error } = await supabase
+      .from('machines')
+      .select('*')
+      .order('id');
+
+    if (error) {
+      console.error('Error fetching machines:', error);
+    } else if (data) {
+      setMachines(data.map(m => ({
+        ...m,
+        status: m.status as 'available' | 'in-use' | 'done',
+        type: m.type as 'washer' | 'dryer',
+        endTime: m.end_time ? new Date(m.end_time) : undefined,
+        currentProgram: m.current_program_name ? {
+          id: m.current_program_name,
+          name: m.current_program_name,
+          duration: m.current_program_duration || 45,
+          type: m.type as 'washer' | 'dryer',
+        } : undefined,
+        canPostpone: m.can_postpone,
+      })));
+    }
+  };
 
   const handleMachineSelect = (machine: Machine) => {
     if (machine.status === 'available') {
@@ -29,65 +73,81 @@ const Index = () => {
     }
   };
 
-  const handleStopMachine = (machine: Machine) => {
-    setMachines(prev =>
-      prev.map(m =>
-        m.id === machine.id
-          ? { ...m, status: 'available', currentProgram: undefined, endTime: undefined }
-          : m
-      )
-    );
+  const handleStopMachine = async (machine: Machine) => {
+    const { error } = await supabase
+      .from('machines')
+      .update({
+        status: 'available',
+        current_program_name: null,
+        current_program_duration: null,
+        end_time: null,
+        can_postpone: null,
+      })
+      .eq('id', machine.id);
 
-    toast({
-      title: "Timer Stopped",
-      description: `${machine.name} timer has been cancelled.`,
-    });
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to stop machine",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Timer Stopped",
+        description: `${machine.name} timer has been cancelled.`,
+      });
+    }
   };
 
-  const handleProgramSelect = (program: Program) => {
+  const handleProgramSelect = async (program: Program) => {
     if (!selectedMachine) return;
 
+    // Use 45 minutes as the fixed duration
+    const duration = 45;
     const endTime = new Date();
-    endTime.setMinutes(endTime.getMinutes() + program.duration);
+    endTime.setMinutes(endTime.getMinutes() + duration);
 
-    setMachines(prev =>
-      prev.map(m =>
-        m.id === selectedMachine.id
-          ? {
-              ...m,
-              status: 'in-use',
-              currentProgram: program,
-              endTime,
-              canPostpone: true,
-            }
-          : m
-      )
-    );
+    const { error } = await supabase
+      .from('machines')
+      .update({
+        status: 'in-use',
+        current_program_name: program.name,
+        current_program_duration: duration,
+        end_time: endTime.toISOString(),
+        can_postpone: true,
+      })
+      .eq('id', selectedMachine.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start machine",
+        variant: "destructive",
+      });
+      return;
+    }
 
     toast({
       title: "Program Started",
-      description: `${selectedMachine.name} is now running ${program.name} for ${program.duration} minutes.`,
+      description: `${selectedMachine.name} is now running ${program.name} for ${duration} minutes.`,
     });
 
     setShowProgramSelector(false);
     setSelectedMachine(null);
 
     // Simulate completion
-    setTimeout(() => {
-      setMachines(prev =>
-        prev.map(m =>
-          m.id === selectedMachine.id
-            ? { ...m, status: 'done' }
-            : m
-        )
-      );
+    setTimeout(async () => {
+      await supabase
+        .from('machines')
+        .update({ status: 'done' })
+        .eq('id', selectedMachine.id);
 
       toast({
         title: "Cycle Complete!",
         description: `${selectedMachine.name} has finished. Please unload your laundry.`,
         variant: "default",
       });
-    }, program.duration * 60 * 1000);
+    }, duration * 60 * 1000);
   };
 
   return (
@@ -98,25 +158,14 @@ const Index = () => {
           <h1 className="text-4xl md:text-5xl font-bold mb-3 text-foreground">
             Laundry Room
           </h1>
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <Smartphone className="w-5 h-5" />
-            <p className="text-lg">Scan QR code to start</p>
-          </div>
+          <p className="text-lg text-muted-foreground mb-4">
+            View available machines and their status
+          </p>
+          <Button onClick={() => navigate('/qr-codes')} variant="outline">
+            <QrCode className="w-4 h-4 mr-2" />
+            View QR Codes
+          </Button>
         </header>
-
-        {/* QR Codes Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-center text-foreground">Machine QR Codes</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {machines.map((machine) => (
-              <QRCodeDisplay 
-                key={machine.id} 
-                machineId={machine.id} 
-                machineName={machine.name}
-              />
-            ))}
-          </div>
-        </div>
 
         {/* Machines Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
